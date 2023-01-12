@@ -15,9 +15,7 @@
 local test = require "integration_test"
 local capabilities = require "st.capabilities"
 local zw_test_utilities = require "integration_test.zwave_test_utils"
-local Association = (require "st.zwave.CommandClass.Association")({ version = 2 })
 local Battery = (require "st.zwave.CommandClass.Battery")({ version = 1 })
-local ManufacturerSpecific = (require "st.zwave.CommandClass.ManufacturerSpecific")({ version = 2 })
 local SensorMultilevel = (require "st.zwave.CommandClass.SensorMultilevel")({version = 2})
 local SensorMultilevelv5 = (require "st.zwave.CommandClass.SensorMultilevel")({ version = 5 })
 local ThermostatMode = (require "st.zwave.CommandClass.ThermostatMode")({ version = 2 })
@@ -157,34 +155,55 @@ test.register_message_test(
 test.register_coroutine_test(
   "Thermostat setpoint reports should be handled",
   function()
-    mock_device:set_field("mode", "auto", {persist = true})
-
-      -- receiving a report in fahrenheit should make subsequent sets also be sent in fahrenheit
-    test.socket.zwave:__queue_receive(
-        {
-          mock_device.id,
-          zw_test_utilities.zwave_test_build_receive_command(
-              ThermostatSetpoint:Report(
-                  {
-                    setpoint_type = ThermostatSetpoint.setpoint_type.HEATING_1,
-                    scale = 0,
-                    value = 68.0
-                  })
-          )
-
-        }
+    test.socket.zwave:__queue_receive({
+      mock_device.id,
+      zw_test_utilities.zwave_test_build_receive_command(
+        ThermostatMode:Report({ mode = ThermostatMode.mode.AUTO })
+      )
+    })
+    test.socket.capability:__expect_send(mock_device:generate_test_message("main",
+      capabilities.thermostatMode.thermostatMode({value = "auto"})
+    ))
+    test.socket.zwave:__expect_send(
+      zw_test_utilities.zwave_test_build_send_command(
+        mock_device,
+        ThermostatOperatingState:Get({})
+      )
     )
     test.socket.zwave:__expect_send(
-        zw_test_utilities.zwave_test_build_send_command(
-            mock_device,
-            ThermostatSetpoint:Set({
-                                      setpoint_type = ThermostatSetpoint.setpoint_type.COOLING_1,
-                                      scale = 0,
-                                      precision = 0,
-                                      value = 70.0
-                                    })
-        )
+      zw_test_utilities.zwave_test_build_send_command(
+        mock_device,
+        ThermostatSetpoint:Get({setpoint_type = ThermostatSetpoint.setpoint_type.HEATING_1})
+      )
     )
+    test.socket.zwave:__expect_send(
+      zw_test_utilities.zwave_test_build_send_command(
+        mock_device,
+        ThermostatSetpoint:Get({setpoint_type = ThermostatSetpoint.setpoint_type.COOLING_1})
+      )
+    )
+
+      -- receiving a report in fahrenheit should make subsequent sets also be sent in fahrenheit
+    test.socket.zwave:__queue_receive({
+      mock_device.id,
+      zw_test_utilities.zwave_test_build_receive_command(
+        ThermostatSetpoint:Report({
+          setpoint_type = ThermostatSetpoint.setpoint_type.HEATING_1,
+          scale = ThermostatSetpoint.scale.FAHRENHEIT,
+          value = 68.0
+        })
+      )
+    })
+    test.socket.zwave:__expect_send(
+      zw_test_utilities.zwave_test_build_send_command(
+        mock_device,
+        ThermostatSetpoint:Set({
+          setpoint_type = ThermostatSetpoint.setpoint_type.COOLING_1,
+          scale = ThermostatSetpoint.scale.FAHRENHEIT,
+          precision = 0,
+          value = 71.0
+        })
+    ))
     test.socket.zwave:__expect_send(
       zw_test_utilities.zwave_test_build_send_command(
         mock_device,
@@ -388,7 +407,6 @@ test.register_coroutine_test(
     mock_device:set_field("temperature_scale", 1, {persist = true})
     mock_device:set_field("precision", 0, {persist = true})
 
-    test.timer.__create_and_queue_test_time_advance_timer(1, "oneshot")
     test.socket.capability:__queue_receive({ mock_device.id, { capability = "thermostatHeatingSetpoint", command = "setHeatingSetpoint", args = { 100 } } })
 
     test.socket.zwave:__expect_send(
