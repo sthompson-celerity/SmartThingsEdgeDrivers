@@ -20,9 +20,12 @@ local capabilities = require "st.capabilities"
 -- reports this value as an Int8, rather than a Boolean, as per the spec
 local function incorrect_data_type_detected(opts, driver, device, zb_rx, ...)
   return opts.dispatcher_class == "ZigbeeMessageDispatcher" and
+    zb_rx.body and
     zb_rx.body.zcl_body and
-    zb_rx.body.zcl_body.attr_record and
-    zb_rx.body.zcl_body.attr_record.data_type.value ~= data_types.Boolean.ID
+    zb_rx.body.zcl_body.attr_records and
+    zb_rx.address_header.cluster.value == zcl_clusters.OnOff.ID and
+    zb_rx.body.zcl_body.attr_records[1].attr_id.value == zcl_clusters.OnOff.attributes.OnOff.ID and
+    zb_rx.body.zcl_body.attr_records[1].data_type.value ~= data_types.Boolean.ID
 end
 
 local function on_off_attr_handler(driver, device, value, zb_rx)
